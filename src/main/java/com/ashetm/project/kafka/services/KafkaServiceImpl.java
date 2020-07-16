@@ -7,13 +7,13 @@ import org.springframework.stereotype.Service;
 
 @Service
 @Profile("WITH_PRODUCER")
-public class KafkaServiceImpl implements KafkaService<String> {
+public class KafkaServiceImpl<T> implements KafkaService<T> {
 
     @Autowired
-    KafkaProducer<String, String> kafkaProducer;
+    KafkaProducer<String, T> kafkaProducer;
 
     @Override
-    public void send(String topic, String message) {
+    public void send(String topic, T message) {
         this.kafkaProducer.send(topic, message);
     }
 }

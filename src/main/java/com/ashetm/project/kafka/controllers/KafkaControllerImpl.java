@@ -2,6 +2,7 @@ package com.ashetm.project.kafka.controllers;
 
 import com.ashetm.project.kafka.dto.KafkaResponseView;
 import com.ashetm.project.kafka.enums.KafkaTopic;
+import com.ashetm.project.kafka.models.Message;
 import com.ashetm.project.kafka.services.KafkaService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
@@ -15,11 +16,12 @@ import org.springframework.web.bind.annotation.*;
 public class KafkaControllerImpl implements KafkaController {
 
     @Autowired
-    KafkaService kafkaService;
+    KafkaService<Message> kafkaService;
 
     @PostMapping("/{topic}")
     @Override
-    public ResponseEntity<KafkaResponseView> produce(@PathVariable String topic, @RequestBody String body) {
+    public ResponseEntity<KafkaResponseView> produce(
+            @PathVariable String topic, @RequestBody Message body) {
         if(body.equals(null))
             return ResponseEntity
                     .status(HttpStatus.BAD_REQUEST)
@@ -30,13 +32,13 @@ public class KafkaControllerImpl implements KafkaController {
                     .status(HttpStatus.NOT_FOUND)
                     .body(KafkaResponseView.to(false));
 
-//        try {
-        this.kafkaService.send(topic, body);
-//        } catch(Exception e) {
-//            return ResponseEntity
-//                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
-//                    .body(false);
-//        }
+        try {
+            this.kafkaService.send(topic, body);
+        } catch(Exception e) {
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(KafkaResponseView.to(false));
+        }
 
         return ResponseEntity.ok(KafkaResponseView.to(true));
     }

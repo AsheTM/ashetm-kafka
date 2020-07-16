@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AsheTM Kafka Client & Web Socket</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.4.0/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.27.0/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.6.11/vue.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.19.2/axios.min.js"></script>
+
+    <style>
+        .body {
+            width: 100%;
+            max-width: 300px;
+            min-height: 50vh;
+            display: flex;
+            flex-flow: column nowrap;
+            padding: 32px 16px;
+            margin: 16px auto auto;
+            box-shadow: 0 0 12px rgba(0, 0, 0, .5);
+            border-radius: 5px;
+        }
+
+        .body label{
+            padding-bottom: 16px;
+            margin: 0 auto;
+        }
+
+        .body .producer {
+            display: flex;
+            flex-flow: row nowrap;
+            align-items: center;
+            justify-content: space-evenly;
+            order: 1;
+        }
+
+        .body .producer input {
+            order: 1;
+        }
+
+        .body .producer button {
+            order: 2;
+        }
+
+        .body .consumer {
+            order: 2;
+        }
+
+        .body .consumer h1{
+            text-align: center;
+            padding-bottom: 0;
+            margin-bottom: 8px;
+        }
+
+        .body .consumer .consumer__messages{
+            display: flex;
+            flex-flow: column nowrap;
+        }
+
+        .body .consumer .consumer__messages .consumer__message{
+            padding: 8px;
+        }
+
+        .body .consumer .consumer__messages .consumer__message span{
+            width: 100%;
+            display: flex;
+            font-size: 10px;
+            opacity: .8;
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+    <script>
+        let socket = new SockJS('/websocket');
+        let stompClient = Stomp.over(socket);
+
+        const ProducerComponent = {
+            template: `
+                <template>
+                    <div class="producer">
+                        <input v-model="msg" />
+                        <button v-on:click="send">Send</button>
+                        <select v-on:change="chooseCanal">
+                            <option v-for="(topic, index) in canals" 
+                                :key="index" 
+                                :value="topic" 
+                                :selected="topic === canal.name">{{ topic }}</option>
+                        </select>
+                    </div>
+                </template>
+            `, 
+            data() {
+                let { id, canal, canals } = this.$props;
+                return { id, msg: '', canal, canals };
+            }, 
+            methods: {
+                send() {
+                    let { id, msg: content, canal } = this.$data;
+                    let message = { id, content, now: Date.now() };
+                    axios.post(`/kafka/${ canal.name }`, message)
+                        .then(({ done }) => {
+                            if(done) 
+                                this.msg = '';
+                        });
+                }, 
+                chooseCanal({ target }) {
+                    this.$props.canal.name = target.value;
+                }
+            }, 
+            props: ['id', 'canal', 'canals']
+        };
+
+        const ConsumerComponent = {
+            template: `
+                <template>
+                    <div class="consumer">
+                        <h1>Consumed Message: {{ canal.name }}</h1>
+                        <h2 v-if="isDisconnected">Disconnected from server</h2>
+                        <div class="consumer__messages">
+                            <div class="consumer__message" v-for="({ content, id }, index) in messages[canal.name]" 
+                                :key="index">
+                                <span>{{ id }}</span> {{ content }}
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            `, 
+            data() {
+                return {
+                    messages: { TOPIC_1: [], TOPIC_2: [] }, 
+                    isDisconnected: false
+                };
+            }, 
+            mounted() {
+                let { messages } = { ...this.$data };
+                stompClient.connect({}, frame => {
+                    for(let topic in messages) 
+                        stompClient.subscribe(`/topic/${ topic }/message`, 
+                            ({ body }) => messages[topic].push(JSON.parse(body)));
+                }, () => this.isDisconnected = true);
+            }, 
+            props: ['canal']
+        };
+
+        const vueInstance = new Vue({
+            el: '#app', 
+            template: `
+                <div class="body">
+                    <label>{{ id }}</label>
+                    <ProducerComponent :canal.sync="canal" :canals.once="canals" :id.once="id" />
+                    <ConsumerComponent :canal.sync="canal" />
+                </div>
+            `, 
+            data() {
+                let id = Math
+                        .random()
+                        .toString(36)
+                        .substr(2, Math.pow(2, 256));
+                return {
+                    id, 
+                    canal: { name: 'TOPIC_1' }, 
+                    canals: ["TOPIC_1", "TOPIC_2"]
+                };
+            }, 
+            components: {
+                ProducerComponent, 
+                ConsumerComponent
+            }
+        });
+    </script>
+</body>
+</html>
